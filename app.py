@@ -16,7 +16,7 @@ from core.pipeline import Project, process
 from core.subtitle import parse_srt
 from core.translator import LLMTranslator
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 PROVIDERS = {
     "deepseek": {

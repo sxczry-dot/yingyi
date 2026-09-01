@@ -376,6 +376,8 @@ def encode_with_effects(
         cmd += ["-c:v", name, *args]
     else:
         cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "19"]
+    # 每 2 秒一个关键帧：切段时切口最多偏 2 秒（配合切点强制关键帧可达 0 偏差）
+    cmd += ["-g", "48"]
     if audio_codec in ("aac", "mp3"):
         cmd += ["-c:a", "copy"]
     elif audio_codec:
@@ -402,13 +404,12 @@ def split_segments(full_path: str, out_dir: str, segment_seconds: int = None, cu
             if b - a < 0.5:
                 continue
             out = os.path.join(out_dir, f"part_{i:03d}.mp4")
-            # -ss 放在 -i 之后：ffmpeg 写 edit list 标记精确起点，
-            # 不依赖切点处是否有关键帧，播放起点与时长都精确
+            # -ss 放在 -i 之前：视频音频从同一关键帧起切，物理同步（不依赖 edit list）；
+            # 成片按 -g 48（2 秒）和切点强制关键帧编码，切口偏差 ≤2 秒
             _run(
                 [
-                    FFMPEG, "-y", "-i", full_path,
-                    "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}",
-                    "-map", "0", "-c", "copy",
+                    FFMPEG, "-y", "-ss", f"{a:.3f}", "-i", full_path,
+                    "-t", f"{b - a:.3f}", "-map", "0", "-c", "copy",
                     out,
                 ]
             )
