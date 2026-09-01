@@ -652,9 +652,9 @@ $("btn-translate").addEventListener("click", async () => {
     toast("还没有字幕，请先在上方加载字幕文件", true);
     return;
   }
-  const key = await api.get_api_key();
+  const key = aiState.keys[aiState.provider] || "";
   if (!key) {
-    toast("请先在设置里填写 DeepSeek API Key", true);
+    toast("请先在设置里填写 API Key", true);
     openSettings();
     return;
   }
@@ -662,10 +662,12 @@ $("btn-translate").addEventListener("click", async () => {
   state.editingIdx = -1;
   $("btn-translate").disabled = true;
   api.start_translate(
-    key,
-    state.lines.map((l) => l.text),
+    aiState.provider,
+    aiState.keys[aiState.provider] || "",
+    aiState.models[aiState.provider] || "",
     state.srcLang,
-    state.dstLang
+    state.dstLang,
+    state.lines.map((l) => l.text)
   );
 });
 
@@ -1339,6 +1341,55 @@ async function openSettings() {
   $("modal-settings").classList.remove("hidden");
 }
 
+let aiState = { provider: "deepseek", keys: {}, models: {} };
+let aiProviders = [];
+
+async function loadAiSettings() {
+  try {
+    aiProviders = await api.get_providers();
+    const settings = await api.get_ai_settings();
+    aiState.provider = settings.provider || "deepseek";
+    aiState.keys = settings.keys || {};
+    aiState.models = settings.models || {};
+    const sel = $("select-provider");
+    sel.innerHTML = aiProviders.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+    sel.value = aiState.provider;
+    renderModelOptions();
+  } catch (e) {}
+}
+
+function renderModelOptions() {
+  const p = aiProviders.find((x) => x.id === aiState.provider);
+  if (!p) return;
+  const sel = $("select-model");
+  sel.innerHTML = p.models.map((m) => `<option value="${m.id}">${m.id}（${m.label}）</option>`).join("");
+  const saved = aiState.models[aiState.provider];
+  if (saved && p.models.some((m) => m.id === saved)) sel.value = saved;
+}
+
+function currentProviderSettings() {
+  return {
+    keys: aiState.keys,
+    models: aiState.models,
+    provider: aiState.provider,
+  };
+}
+
+$("select-provider").addEventListener("change", () => {
+  aiState.provider = $("select-provider").value;
+  renderModelOptions();
+  $("input-api-key").value = aiState.keys[aiState.provider] || "";
+});
+
+$("select-model").addEventListener("change", () => {
+  aiState.models[aiState.provider] = $("select-model").value;
+});
+
+async function openSettings() {
+  $("modal-settings").classList.remove("hidden");
+  $("input-api-key").value = aiState.keys[aiState.provider] || "";
+}
+
 $("btn-settings").addEventListener("click", openSettings);
 
 $("btn-close-settings").addEventListener("click", () => {
@@ -1346,9 +1397,10 @@ $("btn-close-settings").addEventListener("click", () => {
 });
 
 $("btn-save-key").addEventListener("click", async () => {
-  await api.set_api_key($("input-api-key").value);
+  aiState.keys[aiState.provider] = $("input-api-key").value.trim();
+  await api.set_ai_settings(currentProviderSettings());
   $("modal-settings").classList.add("hidden");
-  toast("API Key 已保存");
+  toast("已保存");
 });
 
 $("link-home").addEventListener("click", (e) => {
@@ -1379,6 +1431,7 @@ async function init() {
     $("app-version").textContent = await api.get_version();
   } catch (e) {}
   loadLanguages();
+  loadAiSettings();
   try {
     const hw = await api.get_hw_info();
     $("hw-info").textContent = hw.available

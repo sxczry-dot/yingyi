@@ -306,10 +306,18 @@
   <div class="modal">
     <div class="modal-title">设置</div>
     <label class="field">
-      <span>DeepSeek API Key</span>
+      <span>AI 供应商</span>
+      <select id="select-provider" class="stream-select"></select>
+    </label>
+    <label class="field">
+      <span>模型</span>
+      <select id="select-model" class="stream-select"></select>
+    </label>
+    <label class="field">
+      <span>API Key</span>
       <input type="password" id="input-api-key" placeholder="sk-...">
     </label>
-    <p class="muted small">翻译用，key 只存在你自己的电脑上（C:\\Users\\你\\.video-tools\\config.json）</p>
+    <p class="muted small">四家 AI 可选（DeepSeek / Kimi / GLM / 千问），各家的 Key 分别保存，切换供应商时自动切换。</p>
     <div class="modal-actions">
       <button id="btn-save-key" class="btn btn-primary">保存</button>
       <button id="btn-close-settings" class="btn btn-ghost">取消</button>

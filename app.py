@@ -14,9 +14,45 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import ffmpeg_tools as ft
 from core.pipeline import Project, process
 from core.subtitle import parse_srt
-from core.translator import DeepSeekTranslator
+from core.translator import LLMTranslator
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
+
+PROVIDERS = {
+    "deepseek": {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "models": [
+            {"id": "deepseek-v4-pro", "label": "专业版 · 最强，稍慢"},
+            {"id": "deepseek-v4-flash", "label": "极速版 · 快，日常够用"},
+        ],
+    },
+    "kimi": {
+        "name": "Kimi",
+        "base_url": "https://api.moonshot.cn/v1",
+        "models": [
+            {"id": "kimi-k3", "label": "旗舰 · 100 万字上下文"},
+        ],
+    },
+    "glm": {
+        "name": "GLM",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "models": [
+            {"id": "glm-4-flash", "label": "免费 · 日常翻译够用"},
+            {"id": "GLM-5.3", "label": "编程与智能体 · 100 万字上下文"},
+            {"id": "GLM-5.2", "label": "长程任务 · 稳定执行"},
+        ],
+    },
+    "qwen": {
+        "name": "千问",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": [
+            {"id": "qwen3.8-max", "label": "旗舰 · 100 万字上下文"},
+            {"id": "qwen3.7-plus", "label": "中档 · 平衡"},
+            {"id": "qwen3.8-flash", "label": "高速 · 便宜"},
+        ],
+    },
+}
 
 logging.basicConfig(
     filename=os.path.join(tempfile.gettempdir(), "yingyi.log"),
@@ -146,14 +182,36 @@ class Api:
         logging.info("open_srt 被调用（打开文件对话框）")
         return _pick_file([("字幕文件", "*.srt *.ass *.ssa *.txt"), ("所有文件", "*.*")])
 
-    def get_api_key(self):
-        logging.info("get_api_key 被调用")
-        return load_config().get("api_key", "")
+    def get_providers(self):
+        return [
+            {"id": pid, "name": p["name"], "models": p["models"]}
+            for pid, p in PROVIDERS.items()
+        ]
 
-    def set_api_key(self, key):
-        logging.info("set_api_key 被调用")
+    def get_ai_settings(self):
         cfg = load_config()
-        cfg["api_key"] = (key or "").strip()
+        keys = cfg.get("api_keys", {})
+        if not keys and cfg.get("api_key"):
+            keys = {"deepseek": cfg["api_key"]}
+        return {
+            "provider": cfg.get("provider", "deepseek"),
+            "keys": keys,
+            "models": cfg.get("models", {}),
+        }
+
+    def set_ai_settings(self, settings):
+        cfg = load_config()
+        cfg["provider"] = settings.get("provider", "deepseek")
+        keys = {}
+        for pid, key in (settings.get("keys") or {}).items():
+            if key and key.strip():
+                keys[pid] = key.strip()
+        cfg["api_keys"] = keys
+        models = {}
+        for pid, m in (settings.get("models") or {}).items():
+            if m and m.strip():
+                models[pid] = m.strip()
+        cfg["models"] = models
         save_config(cfg)
 
     def analyze(self, path):
@@ -225,11 +283,18 @@ class Api:
         hw = self._ensure_hw()
         return {"available": hw["available"], "name": hw.get("name", "")}
 
-    def start_translate(self, api_key, texts, source_lang="auto", target_lang="zh"):
+    def start_translate(self, provider, api_key, model, src_lang, dst_lang, texts):
         def work():
             try:
+                p = PROVIDERS.get(provider, PROVIDERS["deepseek"])
                 self._emit("translate_progress", {"done": 0, "total": len(texts)})
-                translator = DeepSeekTranslator(api_key, source_lang=source_lang, target_lang=target_lang)
+                translator = LLMTranslator(
+                    api_key,
+                    p["base_url"],
+                    model or p["models"][0]["id"],
+                    source_lang=src_lang or "auto",
+                    target_lang=dst_lang or "zh",
+                )
                 result = translator.translate(
                     texts,
                     on_progress=lambda done, total: self._emit(
@@ -238,6 +303,7 @@ class Api:
                 )
                 self._emit("translate_done", {"result": result})
             except Exception as e:
+                logging.exception("翻译失败")
                 self._emit("translate_error", {"message": str(e)})
 
         threading.Thread(target=work, daemon=True).start()

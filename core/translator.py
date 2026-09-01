@@ -76,11 +76,12 @@ def build_prompt(source_lang: str, target_lang: str) -> str:
     )
 
 
-class DeepSeekTranslator:
-    def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com",
+class LLMTranslator:
+    def __init__(self, api_key: str, base_url: str, model: str = "deepseek-chat",
                  source_lang: str = "auto", target_lang: str = "zh"):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
+        self.model = model
         self.system_prompt = build_prompt(source_lang, target_lang)
 
     def _call(self, lines: list[str], context: list[tuple[str, str]] = None) -> list[str]:
@@ -90,7 +91,7 @@ class DeepSeekTranslator:
             parts.append(f"上文（已翻译，仅作语境参考，不要输出这部分）：\n{ctx}")
         parts.append("待翻译：\n" + "\n".join(f"[{i + 1}] {t}" for i, t in enumerate(lines)))
         payload = {
-            "model": "deepseek-chat",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": "\n\n".join(parts)},
