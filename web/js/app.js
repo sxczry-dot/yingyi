@@ -15,7 +15,7 @@ const state = {
   blurStrength: "standard",
   cutPoints: [],
   segmentMinutes: 15,
-  subStyle: { cn_size: "medium", cn_color: "yellow" },
+  subStyle: { cn_size: "medium", cn_color: "yellow", mode: "cn_only" },
   videoFilter: "none",
   filterRanges: [],
   countdownPoints: [],
@@ -280,7 +280,8 @@ async function restoreState() {
   state.blurStrength = saved.blur_strength || "standard";
   state.cutPoints = saved.cut_points || [];
   state.segmentMinutes = saved.segment_minutes || 15;
-  state.subStyle = saved.sub_style || { cn_size: "medium", cn_color: "yellow" };
+  state.subStyle = saved.sub_style || { cn_size: "medium", cn_color: "yellow", mode: "cn_only" };
+  if (!state.subStyle.mode) state.subStyle.mode = "cn_only";
   state.videoFilter = saved.video_filter || "none";
   state.filterRanges = saved.filter_ranges || [];
   state.countdownPoints = saved.countdown_points || [];
@@ -295,6 +296,7 @@ async function restoreState() {
   setRadio("blur-strength", state.blurStrength);
   setRadio("cn-size", state.subStyle.cn_size);
   setRadio("cn-color", state.subStyle.cn_color);
+  setRadio("sub-mode", state.subStyle.mode || "cn_only");
   setRadio("video-filter", state.videoFilter);
   renderFilters();
   renderCountdowns();
@@ -618,7 +620,7 @@ async function extractStream(idx) {
     state.srtText = await api.extract_subtitle(state.processPath, idx);
     state.lines = parseSrt(state.srtText);
     state.translated = [];
-    $("translate-status").textContent = `已加载 ${state.lines.length} 条英文字幕`;
+    $("translate-status").textContent = `已加载 ${state.lines.length} 条外语字幕`;
     $("btn-translate").classList.remove("hidden");
     renderSubPreview();
     updateExportSummary();
@@ -1206,6 +1208,13 @@ document.querySelectorAll('input[name="cn-size"]').forEach((r) => {
 document.querySelectorAll('input[name="cn-color"]').forEach((r) => {
   r.addEventListener("change", () => {
     state.subStyle.cn_color = r.value;
+    scheduleSave();
+  });
+});
+
+document.querySelectorAll('input[name="sub-mode"]').forEach((r) => {
+  r.addEventListener("change", () => {
+    state.subStyle.mode = r.value;
     scheduleSave();
   });
 });

@@ -1,4 +1,5 @@
 import re
+import threading
 import time
 
 import requests
@@ -72,7 +73,7 @@ def build_prompt(source_lang: str, target_lang: str) -> str:
         "1. 只翻译台词本身，不解释，不加任何说明\n"
         "2. 口语化、自然，符合观影习惯，简短有力\n"
         "3. 人名、地名保留常见译法，专有名词可保留原文\n"
-        "4. 严格逐条对应，输出行数与输入行数一致"
+        "4. 严格逐条翻译，每条一行，行首必须带原编号 [数字]，不得合并、跳过或遗漏任何一条"
     )
 
 
@@ -111,24 +112,31 @@ class LLMTranslator:
 
     @staticmethod
     def _parse(content: str, count: int) -> list[str]:
-        lines = []
+        result = [""] * count
+        unnumbered = []
         for raw in content.splitlines():
             raw = raw.strip()
             if not raw:
                 continue
             m = re.match(r"^\[?(\d+)\]?[.、:：)\s]*\s*(.*)$", raw)
             if m:
-                raw = m.group(2).strip()
-            lines.append(raw)
-        while len(lines) < count:
-            lines.append("")
-        return lines[:count]
+                idx = int(m.group(1)) - 1
+                if 0 <= idx < count:
+                    result[idx] = m.group(2).strip()
+            else:
+                unnumbered.append(raw)
+        for raw in unnumbered:
+            for i in range(count):
+                if not result[i]:
+                    result[i] = raw
+                    break
+        return result
 
-    def translate(self, texts: list[str], on_progress=None, batch_size: int = 60) -> list[str]:
+    def _translate_range(self, texts, start, end, batch_size, on_progress, done_counter):
         out = []
-        total = len(texts)
+        total = end - start
         context: list[tuple[str, str]] = []
-        for i in range(0, total, batch_size):
+        for i in range(start, end, batch_size):
             batch = texts[i : i + batch_size]
             for attempt in range(3):
                 try:
@@ -140,6 +148,47 @@ class LLMTranslator:
                     if attempt == 2:
                         raise
                     time.sleep(2 * (attempt + 1))
-            if on_progress:
-                on_progress(min(i + batch_size, total), total)
+            with done_counter["lock"]:
+                done_counter["done"] += len(batch)
+                if on_progress:
+                    on_progress(done_counter["done"], len(texts))
+        return out
+
+    def translate(self, texts: list[str], on_progress=None, batch_size: int = 60, workers: int = 3) -> list[str]:
+        total = len(texts)
+        if total == 0:
+            return []
+        if workers < 1:
+            workers = 1
+        if total <= batch_size:
+            workers = 1
+        per = -(-total // workers)
+        per = -(-per // batch_size) * batch_size
+        ranges = []
+        start = 0
+        while start < total:
+            end = min(start + per, total)
+            ranges.append((start, end))
+            start = end
+        done_counter = {"done": 0, "lock": threading.Lock()}
+        results: dict[int, list[str]] = {}
+        if len(ranges) == 1:
+            results[0] = self._translate_range(texts, 0, total, batch_size, on_progress, done_counter)
+        else:
+            threads = []
+            for idx, (s, e) in enumerate(ranges):
+                t = threading.Thread(
+                    target=lambda i, a, b: results.update(
+                        {i: self._translate_range(texts, a, b, batch_size, on_progress, done_counter)}
+                    ),
+                    args=(idx, s, e),
+                    daemon=True,
+                )
+                threads.append(t)
+                t.start()
+            for t in threads:
+                t.join()
+        out = []
+        for i in sorted(results):
+            out.extend(results[i])
         return out

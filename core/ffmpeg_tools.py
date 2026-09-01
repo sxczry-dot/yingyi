@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -191,6 +192,8 @@ def _ass_text(text: str) -> str:
 def _ass_header(style: dict) -> str:
     en_size, cn_size = SIZES.get(style.get("cn_size", "medium"), SIZES["medium"])
     cn_color = COLORS.get(style.get("cn_color", "yellow"), COLORS["yellow"])
+    cn_only = style.get("mode", "cn_only") == "cn_only"
+    cn_margin = 42 if cn_only else 115
     return f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1920
@@ -200,7 +203,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: EN,Microsoft YaHei,{en_size},&H00FFFFFF,&H00FFFFFF,&H00101010,&H96000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,42,1
-Style: CN,Microsoft YaHei,{cn_size},{cn_color},{cn_color},&H00101010,&H96000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,115,1
+Style: CN,Microsoft YaHei,{cn_size},{cn_color},{cn_color},&H00101010,&H96000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,{cn_margin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -209,10 +212,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 def build_bilingual_ass(lines, translated: list[str], out_path: str, style: dict = None):
     style = style or {}
+    cn_only = style.get("mode", "cn_only") == "cn_only"
     parts = [_ass_header(style)]
     for i, line in enumerate(lines):
         start, end = _ass_time(line.start), _ass_time(line.end)
-        parts.append(f"Dialogue: 0,{start},{end},EN,,0,0,0,,{_ass_text(line.text)}")
+        if not cn_only:
+            parts.append(f"Dialogue: 0,{start},{end},EN,,0,0,0,,{_ass_text(line.text)}")
         cn = translated[i] if i < len(translated) else ""
         if cn.strip():
             parts.append(f"Dialogue: 0,{start},{end},CN,,0,0,0,,{_ass_text(cn)}")
@@ -282,6 +287,11 @@ def run_with_progress(cmd, on_progress=None):
 
 
 HDR_FILTER = (
+    "libplacebo=tonemapping=bt.2446a:color_primaries=bt709:"
+    "color_trc=bt709:gamut_mode=clip,format=yuv420p"
+)
+
+HDR_FILTER_CPU = (
     "zscale=t=linear:npl=100,format=gbrpf32le,"
     "zscale=p=bt709,tonemap=hable:desat=0,"
     "zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
@@ -388,7 +398,53 @@ def encode_with_effects(
         "-progress", "pipe:1", "-nostats", "-loglevel", "error",
         out_path,
     ]
-    run_with_progress(cmd, on_progress)
+    if is_hdr:
+        try:
+            run_with_progress(cmd, on_progress)
+        except RuntimeError:
+            # libplacebo 不可用时回退 CPU 色调映射
+            fallback = [HDR_FILTER_CPU if x == HDR_FILTER else x for x in cmd]
+            for i, x in enumerate(fallback):
+                if isinstance(x, str) and HDR_FILTER in x and HDR_FILTER_CPU not in x:
+                    fallback[i] = x.replace(HDR_FILTER, HDR_FILTER_CPU)
+            run_with_progress(fallback, on_progress)
+    else:
+        run_with_progress(cmd, on_progress)
+
+
+def _fix_mvhd_duration(path: str) -> bool:
+    dur_sec = video_info(path)["duration"]
+    try:
+        with open(path, "r+b") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk = min(4 * 1024 * 1024, size)
+            f.seek(size - chunk)
+            data = f.read(chunk)
+            idx = data.find(b"mvhd")
+            if idx < 0:
+                f.seek(0)
+                data = f.read(chunk)
+                idx = data.find(b"mvhd")
+                if idx < 0:
+                    return False
+                pos = idx
+            else:
+                pos = size - chunk + idx
+            f.seek(pos + 4)
+            version = f.read(1)[0]
+            ts_pos = pos + 4 + 1 + 3 + (16 if version == 1 else 8)
+            f.seek(ts_pos)
+            ts = struct.unpack(">I", f.read(4))[0]
+            new_dur = int(round(dur_sec * ts))
+            f.seek(ts_pos + 4)
+            if version == 1:
+                f.write(struct.pack(">Q", new_dur))
+            else:
+                f.write(struct.pack(">I", new_dur))
+        return True
+    except OSError:
+        return False
 
 
 def split_segments(full_path: str, out_dir: str, segment_seconds: int = None, cut_points=None):
@@ -413,6 +469,7 @@ def split_segments(full_path: str, out_dir: str, segment_seconds: int = None, cu
                     out,
                 ]
             )
+            _fix_mvhd_duration(out)
             parts.append(out)
         return parts
     pattern = os.path.join(out_dir, "part_%03d.mp4")
@@ -426,4 +483,7 @@ def split_segments(full_path: str, out_dir: str, segment_seconds: int = None, cu
         ]
     )
     parts = sorted(f for f in os.listdir(out_dir) if re.match(r"part_\d+\.mp4", f))
-    return [os.path.join(out_dir, p) for p in parts]
+    full_parts = [os.path.join(out_dir, p) for p in parts]
+    for p in full_parts:
+        _fix_mvhd_duration(p)
+    return full_parts
