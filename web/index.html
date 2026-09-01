@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>映译</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="film-strip"></div>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">映</div>
+      <div class="brand-text">
+        <span class="brand-name">映译</span>
+        <span class="brand-sub">电影双语字幕 · 打码 · 切段</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-open" class="btn btn-primary">打开电影</button>
+      <button id="btn-settings" class="btn btn-ghost">设置</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="preview-pane">
+      <div id="video-wrap">
+        <video id="player" preload="metadata"></video>
+        <div id="select-layer" class="select-layer hidden">
+          <div id="select-box" class="select-box hidden"></div>
+          <div id="select-hint" class="select-hint">在画面上按住鼠标拖一个框，松开确认</div>
+        </div>
+        <div id="drop-hint" class="drop-hint">
+          <div class="hint-play"></div>
+          <p class="hint-title">打开一部电影开始</p>
+          <p class="hint-sub">支持 mp4 / mkv / mov / avi 等常见格式</p>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btn-back" class="ctrl-btn ctrl-text" title="快退 15 秒（←）">-15s</button>
+        <button id="btn-play" class="ctrl-btn" title="播放/暂停（空格）">
+          <span class="icon-play"></span>
+        </button>
+        <button id="btn-forward" class="ctrl-btn ctrl-text" title="快进 15 秒（→）">+15s</button>
+        <button id="btn-speed" class="ctrl-btn ctrl-text" title="倍速播放（循环切换）">1x</button>
+        <span id="time-now" class="time clickable" title="点击输入时间直接跳转">00:00:00</span>
+        <input id="time-input" class="time-input hidden" type="text" placeholder="如 1:23:45 或 500 秒">
+        <div class="timeline" id="timeline">
+          <div class="timeline-track">
+            <div class="timeline-buffered" id="timeline-buffered"></div>
+            <div class="timeline-played" id="timeline-played"></div>
+            <div class="timeline-markers" id="timeline-markers"></div>
+            <div class="timeline-cuts" id="timeline-cuts"></div>
+            <div class="timeline-filters" id="timeline-filters"></div>
+            <div class="timeline-countdowns" id="timeline-countdowns"></div>
+          </div>
+          <div class="timeline-thumb" id="timeline-thumb"></div>
+        </div>
+        <span id="time-total" class="time">00:00:00</span>
+        <button id="btn-goto" class="ctrl-btn ctrl-text" title="输入时间跳转（G）">跳转</button>
+        <input type="range" id="vol-slider" class="vol-slider" min="0" max="1" step="0.05" value="1" title="音量（↑↓调节，M 静音）">
+        <button id="btn-fullscreen" class="ctrl-btn ctrl-text" title="全屏（F）">全屏</button>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <nav class="tabs">
+        <button class="tab active" data-tab="subtitles">字幕</button>
+        <button class="tab" data-tab="blur">打码</button>
+        <button class="tab" data-tab="segments">切段</button>
+        <button class="tab" data-tab="filter">滤镜</button>
+        <button class="tab" data-tab="countdown">倒计时</button>
+        <button class="tab" data-tab="export">导出</button>
+      </nav>
+
+      <div class="tab-body">
+        <section id="tab-subtitles" class="tab-page active">
+          <div class="panel-block">
+            <div class="block-title">字幕来源</div>
+            <div id="sub-source" class="block-content">
+              <p class="muted">打开电影后自动检测</p>
+            </div>
+            <button id="btn-pick-srt" class="btn btn-ghost btn-block hidden">手动选择字幕文件 (.srt)</button>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">翻译</div>
+            <div class="block-content">
+              <div class="style-row">
+                <span class="muted">字幕语言</span>
+                <select id="select-src-lang" class="stream-select lang-select"></select>
+              </div>
+              <div class="style-row">
+                <span class="muted">翻译成</span>
+                <select id="select-dst-lang" class="stream-select lang-select"></select>
+              </div>
+              <div id="translate-status" class="muted">等待字幕加载</div>
+              <div class="translate-progress hidden" id="translate-progress">
+                <div class="mini-progress"><div class="mini-progress-fill" id="translate-progress-fill"></div></div>
+                <div class="muted" id="translate-progress-text"></div>
+              </div>
+              <button id="btn-translate" class="btn btn-primary btn-block hidden">翻译成中文</button>
+            </div>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">字幕样式</div>
+            <div class="block-content">
+              <div class="style-row">
+                <span class="muted">中文字号</span>
+                <div class="radio-group">
+                  <input type="radio" name="cn-size" id="cn-size-small" value="small"><label for="cn-size-small">小</label>
+                  <input type="radio" name="cn-size" id="cn-size-medium" value="medium" checked><label for="cn-size-medium">中</label>
+                  <input type="radio" name="cn-size" id="cn-size-large" value="large"><label for="cn-size-large">大</label>
+                </div>
+              </div>
+              <div class="style-row">
+                <span class="muted">中文颜色</span>
+                <div class="radio-group">
+                  <input type="radio" name="cn-color" id="cn-color-yellow" value="yellow" checked><label for="cn-color-yellow" class="swatch swatch-yellow"><span></span>金黄</label>
+                  <input type="radio" name="cn-color" id="cn-color-white" value="white"><label for="cn-color-white" class="swatch swatch-white"><span></span>白色</label>
+                  <input type="radio" name="cn-color" id="cn-color-green" value="green"><label for="cn-color-green" class="swatch swatch-green"><span></span>绿色</label>
+                </div>
+              </div>
+              <p class="muted small">英文始终为白色，显示在画面下方</p>
+            </div>
+          </div>
+          <div class="panel-block grow">
+            <div class="block-title">双语对照 <span class="muted small" id="sub-count"></span></div>
+            <div id="sub-preview" class="sub-preview muted">翻译后可在这里核对和修改译文</div>
+          </div>
+        </section>
+
+        <section id="tab-blur" class="tab-page">
+          <div class="panel-block">
+            <div class="block-title">打码方式</div>
+            <div class="block-content">
+              <div class="radio-group">
+                <input type="radio" name="blur-mode" id="blur-mode-whole" value="whole" checked><label for="blur-mode-whole">整屏糊掉</label>
+                <input type="radio" name="blur-mode" id="blur-mode-region" value="region"><label for="blur-mode-region">只糊框内</label>
+                <input type="radio" name="blur-mode" id="blur-mode-watermark" value="watermark"><label for="blur-mode-watermark">去水印</label>
+              </div>
+              <div class="blur-time-settings">
+                <p class="muted">打码时间：以点击那一刻为中心，向前、向后各糊一段</p>
+                <label class="field">
+                  <span>向前（秒）</span>
+                  <input type="number" id="blur-before" value="0.5" min="0" max="60" step="0.1">
+                </label>
+                <label class="field">
+                  <span>向后（秒）</span>
+                  <input type="number" id="blur-after" value="1" min="0.3" max="600" step="0.1">
+                </label>
+              </div>
+              <div id="blur-whole-panel">
+                <p class="muted">播放到不想看到的镜头时，点下面的按钮，整个画面糊掉一小段</p>
+                <div class="style-row">
+                  <span class="muted">糊的强度</span>
+                  <div class="radio-group">
+                    <input type="radio" name="blur-strength" id="blur-light" value="light"><label for="blur-light">轻度</label>
+                    <input type="radio" name="blur-strength" id="blur-standard" value="standard" checked><label for="blur-standard">标准</label>
+                    <input type="radio" name="blur-strength" id="blur-heavy" value="heavy"><label for="blur-heavy">重度</label>
+                  </div>
+                </div>
+                <button id="btn-add-blur" class="btn btn-danger-outline btn-block">在当前时刻打码</button>
+              </div>
+              <div id="blur-region-panel" class="hidden">
+                <p class="muted">播放到要遮的镜头暂停，点下面的按钮，然后在画面上按住鼠标拖一个框。只糊框里的内容。</p>
+                <button id="btn-select-region" class="btn btn-danger-outline btn-block">开始框选（在画面上拖框）</button>
+              </div>
+              <div id="blur-watermark-panel" class="hidden">
+                <p class="muted">框选画面里的水印（台标、logo），整个电影里这块区域都会被抹掉。静止水印效果最好。</p>
+                <button id="btn-select-watermark" class="btn btn-danger-outline btn-block">框选水印位置</button>
+                <div id="watermark-list" class="blur-list"></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel-block grow">
+            <div class="block-title">打码点列表 <span class="muted small" id="blur-count"></span></div>
+            <div id="blur-list" class="blur-list muted">还没有打码点</div>
+          </div>
+        </section>
+
+        <section id="tab-segments" class="tab-page">
+          <div class="panel-block">
+            <div class="block-title">切段方式</div>
+            <div class="block-content">
+              <div class="radio-group">
+                <input type="radio" name="seg-mode" id="seg-mode-auto" value="auto" checked><label for="seg-mode-auto">自动均分</label>
+                <input type="radio" name="seg-mode" id="seg-mode-manual" value="manual"><label for="seg-mode-manual">手动切点</label>
+              </div>
+              <div id="seg-auto-panel">
+                <label class="field">
+                  <span>每段时长（分钟）</span>
+                  <input type="number" id="segment-minutes" value="15" min="1" max="60" step="1">
+                </label>
+              </div>
+              <div id="seg-manual-panel" class="hidden">
+                <p class="muted">播放到想切开的位置，点下面的按钮。设几个切点就切成几段加一。</p>
+                <button id="btn-add-cut" class="btn btn-ghost btn-block">在当前时刻设切点</button>
+                <div id="cut-list" class="blur-list"></div>
+              </div>
+              <div id="segment-info" class="muted">打开电影后显示预计段数</div>
+            </div>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">说明</div>
+            <div class="block-content muted">
+              切段会精确对齐切点，不会切断台词。<br><br>
+              成片保存在电影同目录下的「电影名_导出」文件夹里。
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-filter" class="tab-page">
+          <div class="panel-block">
+            <div class="block-title">滤镜类型</div>
+            <div class="block-content">
+              <div class="radio-group">
+                <input type="radio" name="video-filter" id="filter-none" value="none" checked><label for="filter-none">无</label>
+                <input type="radio" name="video-filter" id="filter-soft" value="no_blood_soft"><label for="filter-soft">去血色·柔和</label>
+                <input type="radio" name="video-filter" id="filter-strong" value="no_blood_strong"><label for="filter-strong">去血色·强力</label>
+                <input type="radio" name="video-filter" id="filter-bw" value="bw"><label for="filter-bw">黑白</label>
+              </div>
+              <p class="muted small">去血色：把画面里的红色（血液）压暗变灰，其他颜色不变。柔和版保留亮度，强力版压得更狠。</p>
+            </div>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">生效时间段</div>
+            <div class="block-content">
+              <p class="muted">滤镜只在下面的时间段里生效，其余时间画面保持原样</p>
+              <label class="field">
+                <span>每次时长（秒）</span>
+                <input type="number" id="filter-duration" value="5" min="1" max="300" step="1">
+              </label>
+              <button id="btn-add-filter" class="btn btn-primary btn-block">在当前时刻开始应用滤镜</button>
+              <div id="filter-list" class="blur-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-countdown" class="tab-page">
+          <div class="panel-block">
+            <div class="block-title">前方高能倒计时</div>
+            <div class="block-content">
+              <p class="muted">播放到恐怖场景出现的那一刻暂停，点下面的按钮。导出后，那一幕出现前的几秒，画面左下角会显示 3、2、1 倒计时。</p>
+              <label class="field">
+                <span>倒计时秒数</span>
+                <input type="number" id="countdown-seconds" value="3" min="1" max="5" step="1">
+              </label>
+              <button id="btn-add-countdown" class="btn btn-danger-outline btn-block">在此刻加倒计时</button>
+            </div>
+          </div>
+          <div class="panel-block grow">
+            <div class="block-title">倒计时点列表 <span class="muted small" id="countdown-count"></span></div>
+            <div id="countdown-list" class="blur-list"></div>
+          </div>
+        </section>
+
+        <section id="tab-export" class="tab-page">
+          <div class="panel-block">
+            <div class="block-title">导出清单</div>
+            <div id="export-summary" class="block-content muted">还没有任务</div>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">压制引擎</div>
+            <div id="hw-info" class="block-content muted">检测中…</div>
+          </div>
+          <div class="panel-block">
+            <button id="btn-export" class="btn btn-primary btn-block hidden">开始导出</button>
+            <button id="btn-open-folder" class="btn btn-ghost btn-block hidden">打开输出文件夹</button>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">字幕大小与位置</div>
+            <div class="block-content">
+              <div class="effect-demo">
+                <video class="demo-video-player" src="demo_subs.mp4" autoplay muted loop></video>
+              </div>
+              <p class="muted small">小/中/大三种字号，中文始终在英文正上方，都在画面下方，循环播放</p>
+            </div>
+          </div>
+          <div class="panel-block">
+            <div class="block-title">效果预览</div>
+            <div class="block-content">
+              <div class="effect-demo">
+                <video class="demo-video-player" src="demo.mp4" autoplay muted loop></video>
+              </div>
+              <p class="muted small">双语字幕 + 左下角倒计时 3、2、1，循环播放</p>
+              <div class="effect-demo">
+                <video class="demo-video-player" src="demo_blur.mp4" autoplay muted loop></video>
+              </div>
+              <p class="muted small">打码三种强度（轻/标准/重）+ 右上角去水印演示，循环播放</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="statusbar">
+    <div class="progress" id="progress">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <span id="status-text" class="status-text">就绪</span>
+  </footer>
+</div>
+
+<div id="modal-settings" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-title">设置</div>
+    <label class="field">
+      <span>DeepSeek API Key</span>
+      <input type="password" id="input-api-key" placeholder="sk-...">
+    </label>
+    <p class="muted small">翻译用，key 只存在你自己的电脑上（C:\\Users\\你\\.video-tools\\config.json）</p>
+    <div class="modal-actions">
+      <button id="btn-save-key" class="btn btn-primary">保存</button>
+      <button id="btn-close-settings" class="btn btn-ghost">取消</button>
+    </div>
+    <div class="about">
+      映译 v<span id="app-version">0.1.0</span> · <a href="https://xiuchenshen.com" id="link-home">xiuchenshen.com</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
