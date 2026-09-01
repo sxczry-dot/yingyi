@@ -5,3 +5,4 @@ test_workspace/
 *.spec
 build*.log
 *.yingyi.json
+web/diag_*.html
