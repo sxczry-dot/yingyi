@@ -98,6 +98,19 @@ function toast(msg, isError) {
   }, 4000);
 }
 
+function toSrt(lines) {
+  const fmt = (sec) => {
+    const ms = Math.round(sec * 1000);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const mm = ms % 1000;
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0") + "," + String(mm).padStart(3, "0");
+  };
+  const nl = String.fromCharCode(10);
+  return lines.map((l, i) => (i + 1) + nl + fmt(l.start) + " --> " + fmt(l.end) + nl + l.text + nl).join(nl);
+}
+
 function parseSrt(content) {
   const blocks = content.replace(/\r\n/g, "\n").trim().split(/\n\s*\n/);
   const lines = [];
@@ -243,7 +256,7 @@ function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     api.save_state(state.videoPath, {
-      srt: state.srtText,
+      srt: toSrt(state.lines),
       translated: state.translated,
       blur_points: state.blurPoints,
       blur_regions: state.blurRegions,
@@ -712,12 +725,40 @@ function renderSubPreview() {
         ? `<input class="zh-input" data-idx="${i}" value="${esc(zh)}">`
         : `<div class="zh" data-idx="${i}">${zh ? esc(zh) : '<span class="muted small">（点击填写译文）</span>'}</div>`;
     parts.push(
-      `<div class="sub-item${filtered ? " filtered" : ""}"><div class="en"><span class="idx">#${i + 1}</span>${en}${filtered ? ' <span class="muted small">（烧录时将过滤）</span>' : ""}</div>${zhHtml}</div>`
+      `<div class="sub-item${filtered ? " filtered" : ""}">
+        <div class="sub-head"><span class="idx">#${i + 1}</span><span class="sub-time">${fmtTime(l.start)}</span><button class="sub-del" data-idx="${i}" title="删除这条字幕">删除</button></div>
+        <div class="en">${en}${filtered ? ' <span class="muted small">（烧录时将过滤）</span>' : ""}</div>
+        ${zhHtml}
+      </div>`
     );
   }
   box.innerHTML = parts.join("");
   $("sub-count").textContent = `共 ${state.lines.length} 条`;
 }
+
+$("sub-preview").addEventListener("click", (e) => {
+  const del = e.target.closest(".sub-del");
+  if (del) {
+    const i = +del.dataset.idx;
+    state.lines.splice(i, 1);
+    if (i < state.translated.length) state.translated.splice(i, 1);
+    renderSubPreview();
+    updateExportSummary();
+    scheduleSave();
+    toast(`已删除第 ${i + 1} 条字幕`);
+    return;
+  }
+  const zh = e.target.closest(".zh");
+  if (zh) {
+    state.editingIdx = +zh.dataset.idx;
+    renderSubPreview();
+    const input = $("sub-preview").querySelector(".zh-input");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+});
 
 function saveEdit(input) {
   if (state.editingIdx < 0) return;
@@ -727,18 +768,6 @@ function saveEdit(input) {
   updateExportSummary();
   scheduleSave();
 }
-
-$("sub-preview").addEventListener("click", (e) => {
-  const zh = e.target.closest(".zh");
-  if (!zh) return;
-  state.editingIdx = +zh.dataset.idx;
-  renderSubPreview();
-  const input = $("sub-preview").querySelector(".zh-input");
-  if (input) {
-    input.focus();
-    input.select();
-  }
-});
 
 $("sub-preview").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.classList.contains("zh-input")) {
@@ -1335,7 +1364,7 @@ $("btn-export").addEventListener("click", () => {
       ? state.info.color_transfer === "smpte2084" || state.info.color_transfer === "arib-std-b67"
       : false,
     audio_codec: state.info ? state.info.audio_codec || "" : "",
-    srt: state.srtText,
+    srt: toSrt(state.lines),
     translated: state.translated,
     blur_points: state.blurPoints,
     blur_regions: state.blurRegions,

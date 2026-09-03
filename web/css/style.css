@@ -834,3 +834,20 @@ body::after {
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-deep); }
 
 .sub-item.filtered { opacity: 0.55; }
+
+.sub-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.sub-time { font-family: var(--mono); font-size: 10px; color: var(--text-faint); }
+.sub-del {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 10px;
+  color: var(--text-faint);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.sub-item:hover .sub-del { opacity: 1; }
+.sub-del:hover { color: var(--danger); border-color: var(--danger); }
