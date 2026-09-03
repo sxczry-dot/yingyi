@@ -683,6 +683,8 @@ document.querySelectorAll(".lang-select").forEach((sel) => {
 
 function filterSubLine(text) {
   let t = text.replace(/\{\\[^}]*\}/g, "");
+  t = t.replace(/<\/?[a-zA-Z][^>]*>/g, "");
+  t = t.replace(/\\N/g, " ");
   t = t.replace(/\[[^\]]{1,60}\]/g, "");
   t = t.replace(/\([^)]{1,40}\)/g, "");
   t = t.replace(/^[-–—\s]*[A-ZÀ-Ü][A-Z0-9À-Ü '\-.]{1,19}[:：]\s*/gm, "");

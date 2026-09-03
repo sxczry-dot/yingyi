@@ -48,14 +48,17 @@ def parse_srt(content: str) -> list[SubtitleLine]:
 
 
 _ASS_TAG = re.compile(r"\{\\[^}]*\}")
+_HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 _BRACKET = re.compile(r"\[[^\]]{1,60}\]")
 _PAREN = re.compile(r"\([^)]{1,40}\)")
 _SPEAKER = re.compile(r"^[-–—\s]*[A-ZÀ-Ü][A-Z0-9À-Ü '\-.]{1,19}[:：]\s*", re.M)
 
 
 def filter_line(text: str) -> str:
-    """过滤字幕行里的音效描写、ASS 残留标签和人名标注，返回清理后的文本（整行被过滤时返回空串）"""
+    """过滤字幕行里的音效描写、HTML/ASS 残留标签和人名标注，返回清理后的文本（整行被过滤时返回空串）"""
     text = _ASS_TAG.sub("", text)
+    text = _HTML_TAG.sub("", text)
+    text = re.sub(r"\\N", " ", text)
     text = _BRACKET.sub("", text)
     text = _PAREN.sub("", text)
     text = _SPEAKER.sub("", text)
