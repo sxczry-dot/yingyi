@@ -16,7 +16,7 @@ from core.pipeline import Project, process
 from core.subtitle import parse_srt
 from core.translator import LLMTranslator
 
-VERSION = "0.4.6"
+VERSION = "0.4.7"
 
 PROVIDERS = {
     "deepseek": {
@@ -345,6 +345,7 @@ class Api:
                 project.cut_points = [float(t) for t in spec.get("cut_points", [])]
                 project.segment_minutes = float(spec.get("segment_minutes", 15))
                 project.sub_style = dict(spec.get("sub_style", {}))
+                project.sub_filter = bool(spec.get("sub_filter", True))
                 project.video_filter = spec.get("video_filter", "none")
                 project.filter_ranges = [tuple(r) for r in spec.get("filter_ranges", [])]
                 project.countdown_points = [float(t) for t in spec.get("countdown_points", [])]

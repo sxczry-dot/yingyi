@@ -22,6 +22,7 @@ class Project:
         self.cut_points: list[float] = []
         self.segment_minutes = 15
         self.sub_style: dict = {}
+        self.sub_filter = True
         self.video_filter = "none"
         self.filter_ranges: list[tuple[float, float]] = []
         self.countdown_points: list[float] = []
@@ -88,6 +89,20 @@ def process(project: Project, on_step=None) -> list[str]:
     subtitle_lines = [
         SubtitleLine(l.index, l.start + off, l.end + off, l.text) for l in project.subtitle_lines
     ]
+
+    if project.sub_filter:
+        from .subtitle import filter_line
+
+        cleaned = []
+        for l in subtitle_lines:
+            new_text = filter_line(l.text)
+            cleaned.append((l, new_text))
+        subtitle_lines = [
+            SubtitleLine(l.index, l.start, l.end, new_text) for l, new_text in cleaned
+        ]
+        project.translated_texts = [
+            filter_line(t) for t in project.translated_texts
+        ]
 
     project.prepare()
     ass_path = None

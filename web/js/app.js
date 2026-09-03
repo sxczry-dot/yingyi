@@ -681,6 +681,18 @@ document.querySelectorAll(".lang-select").forEach((sel) => {
   });
 });
 
+function filterSubLine(text) {
+  let t = text.replace(/\{\\[^}]*\}/g, "");
+  t = t.replace(/\[[^\]]{1,60}\]/g, "");
+  t = t.replace(/\([^)]{1,40}\)/g, "");
+  t = t.replace(/^[-–—\s]*[A-ZÀ-Ü][A-Z0-9À-Ü '\-.]{1,19}[:：]\s*/gm, "");
+  return t
+    .split("\n")
+    .map((x) => x.replace(/^[-–—]\s*/, "").trim().replace(/[ \t]{2,}/g, " "))
+    .filter((x) => x)
+    .join("\n");
+}
+
 function renderSubPreview() {
   const box = $("sub-preview");
   if (!state.lines.length) {
@@ -691,13 +703,14 @@ function renderSubPreview() {
   for (let i = 0; i < state.lines.length; i++) {
     const l = state.lines[i];
     const zh = state.translated[i] || "";
+    const filtered = l.text.trim() && !filterSubLine(l.text);
     const en = esc(l.text).replace(/\n/g, "<br>");
     const zhHtml =
       i === state.editingIdx
         ? `<input class="zh-input" data-idx="${i}" value="${esc(zh)}">`
         : `<div class="zh" data-idx="${i}">${zh ? esc(zh) : '<span class="muted small">（点击填写译文）</span>'}</div>`;
     parts.push(
-      `<div class="sub-item"><div class="en"><span class="idx">#${i + 1}</span>${en}</div>${zhHtml}</div>`
+      `<div class="sub-item${filtered ? " filtered" : ""}"><div class="en"><span class="idx">#${i + 1}</span>${en}${filtered ? ' <span class="muted small">（烧录时将过滤）</span>' : ""}</div>${zhHtml}</div>`
     );
   }
   box.innerHTML = parts.join("");
